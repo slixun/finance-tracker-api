@@ -41,6 +41,7 @@ def add_expense(
         type=OperationType.EXPENSE,
         amount=operation.amount,
         currency=wallet.currency,
+        new_balance=wallet.balance,
         category=operation.description,
     )
 
@@ -69,6 +70,7 @@ def add_income(
         type=OperationType.INCOME,
         amount=operation.amount,
         currency=wallet.currency,
+        new_balance=wallet.balance,
         category=operation.description,
     )
 
@@ -136,10 +138,11 @@ async def transfer_between_wallets(
 
     operation = operations_repository.create_operation(
         db=db,
-        wallet_id=from_wallet.id,
+        wallet_id=to_wallet.id,
         type=OperationType.TRANSFER,
         amount=target_amount,
         currency=to_wallet.currency,
+        new_balance=to_wallet.balance,
         category="transfer",
     )
     db.add(from_wallet)

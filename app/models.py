@@ -32,6 +32,7 @@ class Operation(Base):
     type: Mapped[OperationType]
     amount: Mapped[Decimal]
     currency: Mapped[CurrencyEnum]
+    new_balance: Mapped[Decimal] = mapped_column(nullable=True, default=None)
     category: Mapped[str | None] = mapped_column(default=None)
     sub_category: Mapped[str | None] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now())

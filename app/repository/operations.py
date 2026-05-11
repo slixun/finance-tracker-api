@@ -12,6 +12,7 @@ def create_operation(
     type: str,
     amount: Decimal,
     currency: CurrencyEnum,
+    new_balance: Decimal,
     category: str | None = None,
     sub_category: str | None = None,
 ) -> Operation:
@@ -20,6 +21,7 @@ def create_operation(
         type=type,
         amount=amount,
         currency=currency,
+        new_balance=new_balance,
         category=category,
         sub_category=sub_category,
     )
