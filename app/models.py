@@ -5,7 +5,7 @@ from sqlalchemy import ForeignKey
 from app.database import Base
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.enum import CurrencyEnum
+from app.enum import CurrencyEnum, OperationType
 
 
 class User(Base):
@@ -29,7 +29,7 @@ class Operation(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"))
-    type: Mapped[str]
+    type: Mapped[OperationType]
     amount: Mapped[Decimal]
     currency: Mapped[CurrencyEnum]
     category: Mapped[str | None] = mapped_column(default=None)
