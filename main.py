@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 async def lifespan(_app: FastAPI):
     yield
 
-    await engine.dispose()
+    engine.dispose()
 
 
 app = FastAPI(lifespan=lifespan)
