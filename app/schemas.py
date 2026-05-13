@@ -53,12 +53,19 @@ class CreateWalletRequest(BaseModel):
 
 class UserRequest(BaseModel):
     login: str = Field(..., max_length=127)
+    password: str = Field(min_length=8)
 
 
-class UserResponse(UserRequest):
+class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
     # from_attributes=True → allows ORM model → Pydantic model conversion
     id: int
+    login: str = Field(..., max_length=127)
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
 
 class WalletResponse(BaseModel):

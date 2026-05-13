@@ -1,6 +1,6 @@
 from decimal import Decimal
 from app.enum import CurrencyEnum
-from app.models import User, Wallet
+from app.models import Wallet
 from sqlalchemy.orm import Session
 
 
@@ -19,7 +19,7 @@ def add_income(db: Session, user_id: int, wallet_name: str, amount: Decimal) -> 
         .filter(Wallet.name == wallet_name, Wallet.user_id == user_id)
         .first()
     )
-    wallet.balance += amount
+    wallet.balance += amount  # type: ignore
     return wallet
 
 
@@ -29,7 +29,7 @@ def add_expense(db: Session, user_id: int, wallet_name: str, amount: Decimal) ->
         .filter(Wallet.name == wallet_name, Wallet.user_id == user_id)
         .first()
     )
-    wallet.balance -= amount
+    wallet.balance -= amount  # type: ignore
     return wallet
 
 
