@@ -4,9 +4,15 @@ from fastapi import HTTPException
 
 from app.enum import CurrencyEnum
 from app.models import User, Wallet
-from app.schemas import CreateWalletRequest, TotalBalance, WalletResponse
+from app.schemas import (
+    CreateWalletRequest,
+    TotalBalance,
+    WalletResponse,
+    WalletUpdateRequest,
+)
 from app.repository import wallets as wallets_repository
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.service import exchange_service
 
 
@@ -42,6 +48,24 @@ def create_wallet(
     return WalletResponse.model_validate(wallet)
 
 
+def update_wallet(
+    db: Session, current_user: User, wallet_id: int, payload: WalletUpdateRequest
+) -> WalletResponse:
+    wallet = wallets_repository.get_wallet_by_id(
+        db=db, user_id=current_user.id, wallet_id=wallet_id
+    )
+    if not wallet:
+        raise HTTPException(
+            status_code=404, detail=f"Wallet id '{wallet_id}' does not exist"
+        )
+    wallet.balance = payload.balance
+    wallet.name = payload.name
+
+    db.commit()
+    db.refresh(wallet)
+    return WalletResponse.model_validate(wallet)
+
+
 def delete_wallet(db: Session, current_user: User, wallet_id: int):
     wallet = wallets_repository.get_wallet_by_id(
         db=db, user_id=current_user.id, wallet_id=wallet_id
@@ -50,10 +74,15 @@ def delete_wallet(db: Session, current_user: User, wallet_id: int):
         raise HTTPException(
             status_code=404, detail=f"Wallet id '{wallet_id}' does not exist"
         )
-    wallet_name = wallet.name
-    db.delete(wallet)
-    db.commit()
-    return {"message": f"Wallet '{wallet_name}' was deleted", "wallet_id": wallet_id}
+    try:
+        db.delete(wallet)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=400, detail="Cannot delete wallet with existing operations"
+        )
+    return WalletResponse.model_validate(wallet)
 
 
 def list_wallets(db: Session, current_user: User) -> list[WalletResponse]:

@@ -2,7 +2,12 @@ from app.dependency import get_current_user, get_db
 from app.models import User
 from app.service import wallets as wallets_service
 from fastapi import APIRouter, Depends
-from app.schemas import CreateWalletRequest, TotalBalance, WalletResponse
+from app.schemas import (
+    CreateWalletRequest,
+    TotalBalance,
+    WalletResponse,
+    WalletUpdateRequest,
+)
 from sqlalchemy.orm import Session
 
 
@@ -33,7 +38,19 @@ def create_wallet(
     return wallets_service.create_wallet(db, current_user, wallet)
 
 
-@router.delete("/wallets")
+@router.put("/wallets/{wallet_id}", response_model=WalletResponse)
+def update_wallet(
+    wallet_id: int,
+    payload: WalletUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return wallets_service.update_wallet(
+        db=db, current_user=current_user, wallet_id=wallet_id, payload=payload
+    )
+
+
+@router.delete("/wallets/{wallet_id}", response_model=WalletResponse)
 def delete_wallet(
     wallet_id: int,
     db: Session = Depends(get_db),

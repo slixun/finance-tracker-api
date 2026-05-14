@@ -51,6 +51,28 @@ class CreateWalletRequest(BaseModel):
         return v  # returns the new value as an attribute
 
 
+class WalletUpdateRequest(BaseModel):
+    name: str = Field(..., max_length=127)
+    balance: Decimal = Decimal(0)
+
+    @field_validator("balance")
+    def balance_not_negative(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError("Amount cannot be negative")
+
+        return v
+
+    @field_validator("name")
+    def name_not_empty(cls, v: str) -> str:
+        # remove spaces on the sides
+        v = v.strip()
+        # check if the name is empty
+        if not v:
+            raise ValueError("Wallet name cannot be empty")
+
+        return v  # returns the new value as an attribute
+
+
 class UserRequest(BaseModel):
     login: str = Field(..., max_length=127)
     password: str = Field(min_length=8)

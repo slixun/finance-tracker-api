@@ -20,7 +20,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """Create a JWT access token."""
+    """Create a JWT access token.
+    Takes user data (e.g. {"sub": user.id}) and token expiration time (e.g. 30 minutes)
+    """
     to_encode = data.copy()
 
     if expires_delta:
