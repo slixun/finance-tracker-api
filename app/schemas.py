@@ -133,5 +133,22 @@ class TransferCreateSchema(BaseModel):
         return v
 
 
+class InterestDuration(BaseModel):
+    duration_in_months: int = 1
+
+    @field_validator("duration_in_months")
+    def duration_gt_one(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("Duration cannot be less than 1 month")
+        return v
+
+
+class InterestResponse(BaseModel):
+    interest: Decimal
+    new_balance: Decimal
+    currency: CurrencyEnum
+    wallet_id: int
+
+
 class TotalBalance(BaseModel):
     total_balance: Decimal
