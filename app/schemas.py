@@ -150,5 +150,10 @@ class InterestResponse(BaseModel):
     wallet_id: int
 
 
+class AllInterestResponse(BaseModel):
+    total_interest: Decimal
+    wallet_interest_list: list[InterestResponse]
+
+
 class TotalBalance(BaseModel):
     total_balance: Decimal

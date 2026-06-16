@@ -5,7 +5,8 @@ from app.models import User
 from app.repository import wallets as wallets_repository
 from fastapi import HTTPException
 
-from app.schemas import InterestResponse
+from app.schemas import AllInterestResponse, InterestResponse
+from app.service import exchange_service
 
 
 def calculate_interest(
@@ -72,12 +73,12 @@ def calculate_interest(
         return response
 
 
-def calculate_all_interest(
+async def calculate_all_interest(
     db: Session, current_user: User, duration_in_months: int
-) -> list[InterestResponse]:
+) -> AllInterestResponse:
     wallets = wallets_repository.get_all_wallets_valid_for_interest(db, current_user.id)
-    result = []
-
+    wallet_interest_list = []
+    combined_interest = Decimal(0)
     for wallet in wallets:
         wallet_balance = wallet.balance
         wallet_currency = wallet.currency
@@ -100,7 +101,8 @@ def calculate_all_interest(
                 currency=wallet_currency,
                 wallet_id=wallet.id,
             )
-            result.append(response)
+            wallet_interest_list.append(response)
+            combined_interest += interest
 
         elif wallet_currency == CurrencyEnum.USD:
             interest = round(
@@ -121,6 +123,15 @@ def calculate_all_interest(
                 wallet_id=wallet.id,
             )
 
-            result.append(response)
+            wallet_interest_list.append(response)
+            rate = await exchange_service.get_exchange_rate(
+                wallet.currency, CurrencyEnum.KZT
+            )
+            combined_interest += interest * rate
+
+    result = AllInterestResponse(
+        total_interest=round(combined_interest, 2),
+        wallet_interest_list=wallet_interest_list,
+    )
 
     return result
