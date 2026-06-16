@@ -47,6 +47,18 @@ def get_all_wallets(db: Session, user_id: int) -> list[Wallet]:
     return wallets
 
 
+def get_all_wallets_valid_for_interest(db: Session, user_id: int) -> list[Wallet]:
+    wallets = (
+        db.query(Wallet)
+        .filter(
+            Wallet.user_id == user_id,
+            Wallet.currency.in_([CurrencyEnum.KZT, CurrencyEnum.USD]),
+        )
+        .all()
+    )
+    return wallets
+
+
 def create_wallet(
     db: Session,
     user_id: int,

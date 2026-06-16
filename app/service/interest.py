@@ -70,3 +70,57 @@ def calculate_interest(
         )
 
         return response
+
+
+def calculate_all_interest(
+    db: Session, current_user: User, duration_in_months: int
+) -> list[InterestResponse]:
+    wallets = wallets_repository.get_all_wallets_valid_for_interest(db, current_user.id)
+    result = []
+
+    for wallet in wallets:
+        wallet_balance = wallet.balance
+        wallet_currency = wallet.currency
+        if wallet_currency == CurrencyEnum.KZT:
+            interest = round(
+                wallet_balance
+                * pow(
+                    Decimal("1")
+                    + ((Decimal("0.141") * Decimal("30")) / Decimal("360")),
+                    duration_in_months,
+                )
+                - wallet_balance,
+                2,
+            )
+            new_balance = wallet_balance + interest
+
+            response = InterestResponse(
+                interest=Decimal(str(interest)),
+                new_balance=Decimal(str(new_balance)),
+                currency=wallet_currency,
+                wallet_id=wallet.id,
+            )
+            result.append(response)
+
+        elif wallet_currency == CurrencyEnum.USD:
+            interest = round(
+                wallet_balance
+                * pow(
+                    Decimal("1") + ((Decimal("0.01") * Decimal("30")) / Decimal("360")),
+                    duration_in_months,
+                )
+                - wallet_balance,
+                2,
+            )
+            new_balance = wallet_balance + interest
+
+            response = InterestResponse(
+                interest=Decimal(str(interest)),
+                new_balance=Decimal(str(new_balance)),
+                currency=wallet_currency,
+                wallet_id=wallet.id,
+            )
+
+            result.append(response)
+
+    return result
