@@ -140,8 +140,14 @@ def test_calculate_interest_wallet_not_found(db_session, client):
     assert response.status_code == 404
 
 
-def test_calculate_all_interest_success(db_session, client):
+def test_calculate_all_interest_success(db_session, client, monkeypatch):
     # Arrange
+    async def fake_get_exchange_rate(base, target):
+        return Decimal("487.9545454545")
+
+    monkeypatch.setattr(
+        "app.service.exchange_service.get_exchange_rate", fake_get_exchange_rate
+    )
     user = User(login="test", password_hash=hash_password("123"))
     db_session.add(user)
     db_session.flush()
