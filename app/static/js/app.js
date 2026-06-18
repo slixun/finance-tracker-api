@@ -1,671 +1,604 @@
-const API_BASE = '../api/v1';
-let currentUser = null;
+const API_BASE = 'http://127.0.0.1:8000/api/v1';
+const TOKEN_KEY = 'financeTrackerToken';
+const USER_KEY = 'financeTrackerUser';
+
+let authMode = 'login';
+let accessToken = localStorage.getItem(TOKEN_KEY);
+let currentUser = localStorage.getItem(USER_KEY);
 let wallets = [];
 let operations = [];
 
-function showToast(title, message, isError = false) {
-    const toastEl = document.getElementById('toastNotification');
-    const toastTitle = document.getElementById('toastTitle');
-    const toastBody = document.getElementById('toastBody');
-    const toastHeader = toastEl.querySelector('.toast-header');
-    
-    toastTitle.textContent = title;
-    toastBody.textContent = message;
-    
-    // Цвета в зависимости от типа
-    if (isError) {
-        toastHeader.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
-        toastHeader.style.color = 'white';
-    } else {
-        toastHeader.style.background = 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)';
-        toastHeader.style.color = 'white';
+const currencySymbols = {
+    kzt: 'KZT',
+    usd: 'USD',
+    eur: 'EUR',
+    rub: 'RUB',
+    btc: 'BTC'
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    bindModalResets();
+    setAuthMode('login');
+
+    if (accessToken) {
+        loadCurrentUser();
     }
-    
-    const toast = new bootstrap.Toast(toastEl, {
-        autohide: true,
-        delay: 3000
-    });
-    toast.show();
+});
+
+function authHeaders(extra = {}) {
+    return {
+        ...extra,
+        Authorization: `Bearer ${accessToken}`
+    };
 }
 
-function showError(message) {
-    showToast('❌ Ошибка', message, true);
+function setAuthMode(mode) {
+    authMode = mode;
+    document.getElementById('loginTab').classList.toggle('active', mode === 'login');
+    document.getElementById('registerTab').classList.toggle('active', mode === 'register');
+    document.getElementById('authSubmit').textContent = mode === 'login' ? 'Sign in' : 'Create account';
 }
 
-function showSuccess(message) {
-    showToast('✅ Успешно', message, false);
-}
+async function submitAuth(event) {
+    event.preventDefault();
 
-function closeModal(modalId) {
-    const modalEl = document.getElementById(modalId);
-    const modal = bootstrap.Modal.getInstance(modalEl);
-    if (modal) modal.hide();
-}
+    const username = document.getElementById('authLogin').value.trim();
+    const password = document.getElementById('authPassword').value;
 
-async function register() {
-    const username = document.getElementById('username').value.trim();
-    if (!username) {
-        showError('Введите логин');
+    if (!username || !password) {
+        showToast('Missing fields', 'Enter both login and password.', true);
         return;
     }
 
+    if (authMode === 'register') {
+        await register(username, password);
+        return;
+    }
+
+    await login(username, password);
+}
+
+async function register(login, password) {
     try {
-        const response = await fetch(`${API_BASE}/users`, {
+        const response = await apiFetch('/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ login: username })
-        });
+            body: JSON.stringify({ login, password })
+        }, false);
 
-        if (response.ok) {
-            showSuccess('Регистрация успешна!');
-            currentUser = username;
-            showMainSection();
-        } else {
-            const error = await response.json();
-            showError(error.detail || 'Ошибка регистрации');
-        }
-    } catch (e) {
-        showError('Не удалось подключиться к серверу');
-    }
-}
-
-async function login() {
-    const username = document.getElementById('username').value.trim();
-    if (!username) {
-        showError('Введите логин');
-        return;
-    }
-    currentUser = username;
-    // Проверяем наличие пользователя через /users/me
-    try {
-        const resp = await fetch(`${API_BASE}/users/me`, {
-            headers: { 'Authorization': `Bearer ${encodeURIComponent(currentUser)}` }
-        });
-        if (!resp.ok) {
-            const data = await resp.json().catch(() => ({}));
-            showError(data.detail || 'Пользователь не найден');
+        if (!response.ok) {
+            showToast('Registration failed', await responseMessage(response), true);
             return;
         }
-        showMainSection();
-    } catch (e) {
-        showError('Не удалось подключиться к серверу');
+
+        showToast('Account created', 'You can now sign in with your password.');
+        setAuthMode('login');
+    } catch {
+        showToast('Connection error', 'Could not reach the API.', true);
     }
 }
 
-function logout() {
-    currentUser = null;
-    wallets = [];
-    operations = [];
-    document.getElementById('authSection').style.display = 'block';
-    document.getElementById('mainSection').style.display = 'none';
-    document.getElementById('username').value = '';
+async function login(login, password) {
+    const formData = new URLSearchParams();
+    formData.set('username', login);
+    formData.set('password', password);
+
+    try {
+        const response = await apiFetch('/users/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+        }, false);
+
+        if (!response.ok) {
+            showToast('Sign in failed', await responseMessage(response), true);
+            return;
+        }
+
+        const data = await response.json();
+        accessToken = data.access_token;
+        localStorage.setItem(TOKEN_KEY, accessToken);
+        await loadCurrentUser();
+    } catch {
+        showToast('Connection error', 'Could not reach the API.', true);
+    }
 }
 
-function showMainSection() {
+async function loadCurrentUser() {
+    const response = await apiFetch('/users/me');
+
+    if (!response.ok) {
+        logout(false);
+        return;
+    }
+
+    const user = await response.json();
+    currentUser = user.login;
+    localStorage.setItem(USER_KEY, currentUser);
+    showDashboard();
+}
+
+function showDashboard() {
     document.getElementById('authSection').style.display = 'none';
     document.getElementById('mainSection').style.display = 'block';
     document.getElementById('currentUser').textContent = currentUser;
     loadAllData();
 }
 
+function logout(showMessage = true) {
+    accessToken = null;
+    currentUser = null;
+    wallets = [];
+    operations = [];
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    document.getElementById('authSection').style.display = 'grid';
+    document.getElementById('mainSection').style.display = 'none';
+    document.getElementById('authPassword').value = '';
+    if (showMessage) showToast('Signed out', 'Your local session was cleared.');
+}
+
 async function loadAllData() {
     await loadWallets();
     await loadOperations();
-    await updateTotalBalance();
+    await loadTotalBalance();
     updateWalletSelects();
 }
 
-async function loadWallets() {
-    try {
-        const response = await fetch(`${API_BASE}/wallets`, {
-            headers: { 'Authorization': `Bearer ${encodeURIComponent(currentUser)}` }
-        });
+async function apiFetch(path, options = {}, includeAuth = true) {
+    const headers = includeAuth ? authHeaders(options.headers || {}) : (options.headers || {});
+    const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
-        if (response.ok) {
-            const rawWallets = await response.json();
-            // Нормализуем данные от бэкенда: приводим валюту к нижнему регистру, баланс к числу
-            wallets = rawWallets.map(w => {
-                // Преобразуем баланс в число (обрабатываем строки, Decimal и другие типы)
-                let balance = 0;
-                if (typeof w.balance === 'number') {
-                    balance = w.balance;
-                } else if (typeof w.balance === 'string') {
-                    balance = parseFloat(w.balance) || 0;
-                } else if (w.balance != null) {
-                    balance = Number(w.balance) || 0;
-                }
-                
-                return {
-                    ...w,
-                    currency: String(w.currency || '').toLowerCase(),
-                    balance: balance
-                };
-            });
-            renderWalletsTable();
-            updateWalletSelects();
-            await updateTotalBalance();
-        } else if (response.status === 401) {
-            console.log('Пользователь не авторизован, кошельков нет');
-            wallets = [];
-            renderWalletsTable();
-            updateWalletSelects();
-            await updateTotalBalance();
-        } else if (response.status === 404) {
-            console.log('Эндпоинт GET /wallets не найден, используем пустой список');
-            wallets = [];
-            renderWalletsTable();
-            updateWalletSelects();
-            await updateTotalBalance();
-        } else {
-            console.error('Ошибка загрузки кошельков:', response.status);
-            wallets = [];
-            renderWalletsTable();
-            updateWalletSelects();
-            await updateTotalBalance();
-        }
-    } catch (e) {
-        console.error('Ошибка подключения:', e);
-        wallets = [];
-        renderWalletsTable();
-        updateWalletSelects();
-        await updateTotalBalance();
+    if (response.status === 401 && includeAuth) {
+        logout(false);
+        showToast('Session expired', 'Please sign in again.', true);
     }
+
+    return response;
+}
+
+async function responseMessage(response) {
+    const data = await response.json().catch(() => ({}));
+
+    if (Array.isArray(data.detail)) {
+        return data.detail.map(item => item.msg).join(' ');
+    }
+
+    return data.detail || 'Something went wrong.';
+}
+
+async function loadWallets() {
+    const response = await apiFetch('/wallets');
+
+    if (!response.ok) {
+        wallets = [];
+        renderWallets();
+        return;
+    }
+
+    wallets = (await response.json()).map(normalizeWallet);
+    renderWallets();
+    updateWalletSelects();
 }
 
 async function loadOperations() {
-    try {
-        const response = await fetch(`${API_BASE}/operations`, {
-            headers: { 'Authorization': `Bearer ${encodeURIComponent(currentUser)}` }
-        });
+    const params = new URLSearchParams();
+    const walletId = document.getElementById('filterWallet')?.value;
+    const dateFrom = document.getElementById('filterDateFrom')?.value;
+    const dateTo = document.getElementById('filterDateTo')?.value;
 
-        if (response.ok) {
-            const rawOperations = await response.json();
-            // Нормализуем данные от бэкенда: приводим валюту к нижнему регистру, сумму к числу
-            operations = rawOperations.map(op => {
-                // Преобразуем сумму в число (обрабатываем строки, Decimal и другие типы)
-                let amount = 0;
-                if (typeof op.amount === 'number') {
-                    amount = op.amount;
-                } else if (typeof op.amount === 'string') {
-                    amount = parseFloat(op.amount) || 0;
-                } else if (op.amount != null) {
-                    amount = Number(op.amount) || 0;
-                }
-                
-                return {
-                    ...op,
-                    currency: String(op.currency || '').toLowerCase(),
-                    amount: amount
-                };
-            });
-            renderOperationsTable();
-        } else if (response.status === 401) {
-            console.log('Пользователь не авторизован, операций нет');
-            operations = [];
-            renderOperationsTable();
-        }
-    } catch (e) {
-        console.error('Ошибка загрузки операций', e);
-    }
-}
+    if (walletId) params.set('wallet_id', walletId);
+    if (dateFrom) params.set('date_from', `${dateFrom}T00:00:00`);
+    if (dateTo) params.set('date_to', `${dateTo}T23:59:59`);
 
-function renderWalletsTable() {
-    const tbody = document.getElementById('walletsTable');
-    
-    if (wallets.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">У вас пока нет кошельков</td></tr>';
+    const query = params.toString() ? `?${params}` : '';
+    const response = await apiFetch(`/operations${query}`);
+
+    if (!response.ok) {
+        operations = [];
+        renderOperations();
         return;
     }
 
-    const currencySymbols = {
-        'rub': '₽',
-        'usd': '$',
-        'eur': '€'
+    operations = (await response.json()).map(normalizeOperation);
+    renderOperations();
+}
+
+async function loadTotalBalance() {
+    const response = await apiFetch('/balance');
+    const totalBalance = document.getElementById('totalBalance');
+
+    if (!response.ok) {
+        totalBalance.textContent = '0.00 KZT';
+        return;
+    }
+
+    const data = await response.json();
+    totalBalance.textContent = `${formatAmount(data.total_balance)} KZT`;
+}
+
+function normalizeWallet(wallet) {
+    return {
+        ...wallet,
+        balance: Number(wallet.balance || 0),
+        currency: String(wallet.currency || '').toLowerCase()
     };
-
-    tbody.innerHTML = wallets.map(w => {
-        // Гарантируем что баланс - число
-        const balance = typeof w.balance === 'number' ? w.balance : (parseFloat(w.balance) || 0);
-        const currency = String(w.currency || '').toLowerCase();
-        const symbol = currencySymbols[currency] || currency.toUpperCase();
-        return `
-            <tr>
-                <td><strong>${w.name}</strong></td>
-                <td><span class="badge bg-secondary">${currency.toUpperCase()}</span></td>
-                <td class="text-end"><strong>${balance.toFixed(2)} ${symbol}</strong></td>
-            </tr>
-        `;
-    }).join('');
 }
 
-function renderOperationsTable() {
-    const tbody = document.getElementById('transactionsTable');
-    
-    if (operations.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Нет транзакций</td></tr>';
+function normalizeOperation(operation) {
+    return {
+        ...operation,
+        amount: Number(operation.amount || 0),
+        new_balance: Number(operation.new_balance || 0),
+        currency: String(operation.currency || '').toLowerCase()
+    };
+}
+
+function renderWallets() {
+    document.getElementById('walletCount').textContent = wallets.length;
+    const host = document.getElementById('walletList');
+
+    if (!wallets.length) {
+        host.innerHTML = '<div class="empty-state">No wallets yet. Add one to start tracking money.</div>';
         return;
     }
 
-    const last10 = operations.slice(-10).reverse();
-    
-    tbody.innerHTML = last10.map(t => {
-        const wallet = wallets.find(w => w.id === t.wallet_id);
-        const walletName = wallet ? wallet.name : 'Неизвестно';
-        let typeClass, typeIcon, typeLabel;
-        if (t.type === 'income') {
-            typeClass = 'text-success';
-            typeIcon = '➕';
-            typeLabel = 'Доход';
-        } else if (t.type === 'expense') {
-            typeClass = 'text-danger';
-            typeIcon = '➖';
-            typeLabel = 'Расход';
-        } else if (t.type === 'transfer') {
-            typeClass = 'text-info';
-            typeIcon = '🔄';
-            typeLabel = 'Перевод';
-        } else {
-            typeClass = 'text-secondary';
-            typeIcon = '❓';
-            typeLabel = 'Неизвестно';
-        }
-        const date = new Date(t.created_at).toLocaleString('ru-RU', {
-            day: '2-digit',
-            month: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-        
-        // Гарантируем что сумма - число
-        const amount = typeof t.amount === 'number' ? t.amount : (parseFloat(t.amount) || 0);
-        const currency = String(t.currency || '').toLowerCase();
-        
-        return `
-            <tr>
-                <td>${date}</td>
-                <td>${typeIcon} <span class="${typeClass}">${typeLabel}</span></td>
-                <td>${walletName}</td>
-                <td>${t.category || t.description || '-'}</td>
-                <td class="text-end ${typeClass}"><strong>${amount.toFixed(2)} ${currency}</strong></td>
-            </tr>
-        `;
-    }).join('');
+    host.innerHTML = wallets.map(wallet => `
+        <article class="wallet-item">
+            <div>
+                <strong>${escapeHtml(wallet.name)}</strong>
+                <span>${currencyLabel(wallet.currency)}</span>
+            </div>
+            <div class="wallet-balance">
+                <strong>${formatAmount(wallet.balance)}</strong>
+                <span>${currencyLabel(wallet.currency)}</span>
+            </div>
+            <div class="wallet-actions">
+                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="editWallet(${wallet.id})">
+                    Edit
+                </button>
+                <button class="btn btn-outline-danger btn-sm" type="button" onclick="deleteWallet(${wallet.id})">
+                    Delete
+                </button>
+            </div>
+        </article>
+    `).join('');
 }
 
-async function updateTotalBalance() {
-    if (wallets.length === 0) {
-        document.getElementById('totalBalance').innerHTML = `
-            0.00 ₸
-            <div class="fs-6 text-muted mt-2">Создайте кошелек для начала</div>
+function renderOperations() {
+    document.getElementById('operationCount').textContent = operations.length;
+    const tbody = document.getElementById('operationsTable');
+
+    if (!operations.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="empty-row">No operations found.</td>
+            </tr>
         `;
         return;
     }
 
-    try {
-        // Получаем общий баланс в рублях с сервера (с конвертацией валют)
-        const response = await fetch(`${API_BASE}/balance`, {
-            headers: { 'Authorization': `Bearer ${encodeURIComponent(currentUser)}` }
-        });
+    tbody.innerHTML = operations
+        .slice()
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        .map(operation => {
+            const wallet = wallets.find(item => item.id === operation.wallet_id);
+            const typeClass = operation.type === 'income'
+                ? 'type-income'
+                : operation.type === 'expense'
+                    ? 'type-expense'
+                    : 'type-transfer';
 
-        if (response.ok) {
-            const data = await response.json();
-            const total = typeof data.total_balance === 'number' ? data.total_balance : (parseFloat(data.total_balance) || 0);
-            document.getElementById('totalBalance').innerHTML = `
-                ${total.toFixed(2)} ₸
-                <div class="fs-6 text-muted mt-2">Общий баланс по всем кошелькам</div>
+            return `
+                <tr>
+                    <td>${formatDate(operation.created_at)}</td>
+                    <td><span class="type-pill ${typeClass}">${operation.type}</span></td>
+                    <td>${escapeHtml(wallet?.name || 'Unknown')}</td>
+                    <td>${escapeHtml(operation.category || '-')}</td>
+                    <td class="text-end">${formatAmount(operation.amount)} ${currencyLabel(operation.currency)}</td>
+                    <td class="text-end">${formatAmount(operation.new_balance)} ${currencyLabel(operation.currency)}</td>
+                </tr>
             `;
-        } else {
-            // Если запрос не удался - показываем 0
-            document.getElementById('totalBalance').innerHTML = `
-                0.00 ₸
-                <div class="fs-6 text-muted mt-2">Ошибка загрузки баланса</div>
-            `;
-        }
-    } catch (e) {
-        console.error('Ошибка загрузки общего баланса:', e);
-        // При ошибке показываем 0
-        document.getElementById('totalBalance').innerHTML = `
-            0.00 ₸
-            <div class="fs-6 text-muted mt-2">Ошибка подключения</div>
-        `;
-    }
+        }).join('');
 }
 
 function updateWalletSelects() {
-    const selects = [
-        'incomeWallet', 'expenseWallet', 'transferFrom', 'transferTo'
-    ];
+    const walletOptions = wallets.map(wallet => `
+        <option value="${wallet.id}">
+            ${escapeHtml(wallet.name)} - ${formatAmount(wallet.balance)} ${currencyLabel(wallet.currency)}
+        </option>
+    `).join('');
+    const emptyOption = '<option value="">No wallets available</option>';
 
-    const currencySymbols = {
-        'rub': '₽',
-        'usd': '$',
-        'eur': '€'
-    };
-
-    selects.forEach(id => {
+    ['incomeWallet', 'expenseWallet', 'transferFrom', 'transferTo', 'interestWallet'].forEach(id => {
         const select = document.getElementById(id);
-        if (!select) return;
-        
-        if (wallets.length === 0) {
-            select.innerHTML = '<option value="">Сначала создайте кошелек</option>';
-        } else {
-            select.innerHTML = wallets.map(w => {
-                // Гарантируем что баланс - число
-                const balance = typeof w.balance === 'number' ? w.balance : (parseFloat(w.balance) || 0);
-                const currency = String(w.currency || '').toLowerCase();
-                const symbol = currencySymbols[currency] || currency.toUpperCase();
-                return `<option value="${w.id}">${w.name} - ${balance.toFixed(2)} ${symbol}</option>`;
-            }).join('');
-        }
+        if (select) select.innerHTML = wallets.length ? walletOptions : emptyOption;
+    });
+
+    const filterWallet = document.getElementById('filterWallet');
+    if (filterWallet) {
+        const selected = filterWallet.value;
+        filterWallet.innerHTML = `<option value="">All wallets</option>${walletOptions}`;
+        filterWallet.value = selected;
+    }
+}
+
+async function saveWallet() {
+    const id = document.getElementById('walletId').value;
+    const name = document.getElementById('walletName').value.trim();
+    const currency = document.getElementById('walletCurrency').value;
+    const balance = Number(document.getElementById('walletBalance').value || 0);
+
+    if (!name) {
+        showToast('Missing name', 'Enter a wallet name.', true);
+        return;
+    }
+
+    const path = id ? `/wallets/${id}` : '/wallets';
+    const method = id ? 'PUT' : 'POST';
+    const body = id
+        ? { name, balance }
+        : { name, currency, initial_balance: balance };
+
+    const response = await apiFetch(path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+        showToast('Wallet error', await responseMessage(response), true);
+        return;
+    }
+
+    closeModal('walletModal');
+    showToast('Wallet saved', id ? 'Wallet updated.' : 'Wallet created.');
+    await loadAllData();
+}
+
+function editWallet(id) {
+    const wallet = wallets.find(item => item.id === id);
+    if (!wallet) return;
+
+    document.getElementById('walletId').value = wallet.id;
+    document.getElementById('walletName').value = wallet.name;
+    document.getElementById('walletCurrency').value = wallet.currency;
+    document.getElementById('walletCurrency').disabled = true;
+    document.getElementById('walletBalance').value = wallet.balance;
+    document.getElementById('walletSubmit').textContent = 'Update wallet';
+    document.querySelector('#walletModal .modal-title').textContent = 'Edit wallet';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('walletModal')).show();
+}
+
+async function deleteWallet(id) {
+    const wallet = wallets.find(item => item.id === id);
+    if (!wallet) return;
+
+    if (!confirm(`Delete wallet "${wallet.name}"?`)) return;
+
+    const response = await apiFetch(`/wallets/${id}`, { method: 'DELETE' });
+
+    if (!response.ok) {
+        showToast('Delete failed', await responseMessage(response), true);
+        return;
+    }
+
+    showToast('Wallet deleted', 'The wallet was removed.');
+    await loadAllData();
+}
+
+async function addOperation(type) {
+    const prefix = type === 'income' ? 'income' : 'expense';
+    const walletId = Number(document.getElementById(`${prefix}Wallet`).value);
+    const amount = Number(document.getElementById(`${prefix}Amount`).value || 0);
+    const description = document.getElementById(`${prefix}Description`).value.trim();
+    const wallet = wallets.find(item => item.id === walletId);
+
+    if (!wallet) {
+        showToast('No wallet selected', 'Choose a wallet first.', true);
+        return;
+    }
+
+    if (amount <= 0) {
+        showToast('Invalid amount', 'Amount must be greater than zero.', true);
+        return;
+    }
+
+    const response = await apiFetch(`/operations/${type}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            wallet_name: wallet.name,
+            amount,
+            description: description || type
+        })
+    });
+
+    if (!response.ok) {
+        showToast('Operation failed', await responseMessage(response), true);
+        return;
+    }
+
+    closeModal(`${prefix}Modal`);
+    showToast('Operation saved', `${capitalize(type)} added.`);
+    await loadAllData();
+}
+
+async function transferMoney() {
+    const fromWalletId = Number(document.getElementById('transferFrom').value);
+    const toWalletId = Number(document.getElementById('transferTo').value);
+    const amount = Number(document.getElementById('transferAmount').value || 0);
+
+    if (fromWalletId === toWalletId) {
+        showToast('Invalid transfer', 'Choose two different wallets.', true);
+        return;
+    }
+
+    if (amount <= 0) {
+        showToast('Invalid amount', 'Amount must be greater than zero.', true);
+        return;
+    }
+
+    const response = await apiFetch('/operations/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            from_wallet_id: fromWalletId,
+            to_wallet_id: toWalletId,
+            amount
+        })
+    });
+
+    if (!response.ok) {
+        showToast('Transfer failed', await responseMessage(response), true);
+        return;
+    }
+
+    closeModal('transferModal');
+    showToast('Transfer complete', 'Balances were updated.');
+    await loadAllData();
+}
+
+async function calculateWalletInterest() {
+    const walletId = document.getElementById('interestWallet').value;
+    const months = Number(document.getElementById('interestMonths').value || 1);
+
+    if (!walletId) {
+        showToast('No wallet selected', 'Choose a wallet first.', true);
+        return;
+    }
+
+    const response = await apiFetch(`/interest/${walletId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duration_in_months: months })
+    });
+
+    if (!response.ok) {
+        showToast('Interest error', await responseMessage(response), true);
+        return;
+    }
+
+    const result = await response.json();
+    document.getElementById('singleInterestResult').innerHTML = interestCard(result);
+}
+
+async function calculateAllInterest(source = 'quick') {
+    const fieldId = source === 'modal' ? 'interestMonths' : 'quickInterestMonths';
+    const months = Number(document.getElementById(fieldId)?.value || 1);
+
+    const response = await apiFetch('/interest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duration_in_months: months })
+    });
+
+    if (!response.ok) {
+        showToast('Interest error', await responseMessage(response), true);
+        return;
+    }
+
+    const data = await response.json();
+    const rows = data.wallet_interest_list.length
+        ? data.wallet_interest_list.map(interestCard).join('')
+        : '<div class="empty-state">No KZT or USD wallets are eligible for interest.</div>';
+
+    document.getElementById('interestResults').innerHTML = `
+        <div class="interest-total">Total interest: ${formatAmount(data.total_interest)} KZT</div>
+        ${rows}
+    `;
+    showToast('Interest calculated', 'The forecast was updated.');
+}
+
+function interestCard(result) {
+    const wallet = wallets.find(item => item.id === result.wallet_id);
+    const currency = currencyLabel(result.currency);
+
+    return `
+        <div class="interest-card">
+            <strong>${escapeHtml(wallet?.name || `Wallet ${result.wallet_id}`)}</strong>
+            <span>Interest: ${formatAmount(result.interest)} ${currency}</span>
+            <span>New balance: ${formatAmount(result.new_balance)} ${currency}</span>
+        </div>
+    `;
+}
+
+function resetFilters() {
+    document.getElementById('filterWallet').value = '';
+    document.getElementById('filterDateFrom').value = '';
+    document.getElementById('filterDateTo').value = '';
+    loadOperations();
+}
+
+function bindModalResets() {
+    document.getElementById('walletModal').addEventListener('hidden.bs.modal', () => {
+        document.getElementById('walletId').value = '';
+        document.getElementById('walletName').value = '';
+        document.getElementById('walletCurrency').value = 'kzt';
+        document.getElementById('walletCurrency').disabled = false;
+        document.getElementById('walletBalance').value = '0';
+        document.getElementById('walletSubmit').textContent = 'Create wallet';
+        document.querySelector('#walletModal .modal-title').textContent = 'Add wallet';
+    });
+
+    ['income', 'expense'].forEach(prefix => {
+        document.getElementById(`${prefix}Modal`).addEventListener('hidden.bs.modal', () => {
+            document.getElementById(`${prefix}Amount`).value = '';
+            document.getElementById(`${prefix}Description`).value = '';
+        });
+    });
+
+    document.getElementById('transferModal').addEventListener('hidden.bs.modal', () => {
+        document.getElementById('transferAmount').value = '';
+    });
+
+    ['incomeModal', 'expenseModal', 'transferModal', 'interestModal'].forEach(id => {
+        document.getElementById(id).addEventListener('show.bs.modal', updateWalletSelects);
     });
 }
 
-async function addWallet() {
-    const name = document.getElementById('walletName').value.trim();
-    const currency = document.getElementById('walletCurrency').value;
-    const balance = parseFloat(document.getElementById('walletBalance').value);
-
-    if (!name) {
-        showError('Введите название кошелька');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/wallets`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${encodeURIComponent(currentUser)}`
-            },
-            body: JSON.stringify({ name, currency, initial_balance: balance })
-        });
-
-        if (response.ok) {
-            showSuccess('Кошелек создан!');
-            closeModal('addWalletModal');
-            document.getElementById('walletName').value = '';
-            document.getElementById('walletBalance').value = '0';
-            await loadAllData();
-        } else {
-            const error = await response.json();
-            showError(error.detail || 'Ошибка создания кошелька');
-        }
-    } catch (e) {
-        showError('Ошибка подключения');
-    }
+function closeModal(id) {
+    const modal = bootstrap.Modal.getInstance(document.getElementById(id));
+    if (modal) modal.hide();
 }
 
-async function addIncome() {
-    if (wallets.length === 0) {
-        showError('Сначала создайте кошелек');
-        return;
-    }
-
-    const wallet_id = parseInt(document.getElementById('incomeWallet').value);
-    const amount = parseFloat(document.getElementById('incomeAmount').value);
-    const description = document.getElementById('incomeDescription').value.trim();
-
-    if (!amount || amount <= 0) {
-        showError('Введите корректную сумму');
-        return;
-    }
-
-    const wallet = wallets.find(w => w.id === wallet_id);
-    if (!wallet) {
-        showError('Кошелек не найден');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/operations/income`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${encodeURIComponent(currentUser)}`
-            },
-            body: JSON.stringify({ 
-                wallet_name: wallet.name, 
-                amount, 
-                description,
-                category: description || 'доход'
-            })
-        });
-
-        if (response.ok) {
-            showSuccess('Доход добавлен!');
-            closeModal('addIncomeModal');
-            document.getElementById('incomeAmount').value = '';
-            document.getElementById('incomeDescription').value = '';
-            await loadAllData();
-        } else {
-            const error = await response.json();
-            showError(error.detail || 'Ошибка добавления дохода');
-        }
-    } catch (e) {
-        showError('Ошибка подключения');
-    }
+function showToast(title, message, isError = false) {
+    const toastEl = document.getElementById('toastNotification');
+    document.getElementById('toastTitle').textContent = title;
+    document.getElementById('toastBody').textContent = message;
+    toastEl.classList.toggle('toast-error', isError);
+    bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 3200 }).show();
 }
 
-async function addExpense() {
-    if (wallets.length === 0) {
-        showError('Сначала создайте кошелек');
-        return;
-    }
-
-    const wallet_id = parseInt(document.getElementById('expenseWallet').value);
-    const amount = parseFloat(document.getElementById('expenseAmount').value);
-    const category = document.getElementById('expenseCategory').value.trim();
-    const description = document.getElementById('expenseDescription').value.trim();
-
-    if (!amount || amount <= 0) {
-        showError('Введите корректную сумму');
-        return;
-    }
-
-    if (!category) {
-        showError('Введите категорию');
-        return;
-    }
-
-    const wallet = wallets.find(w => w.id === wallet_id);
-    if (!wallet) {
-        showError('Кошелек не найден');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/operations/expense`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${encodeURIComponent(currentUser)}`
-            },
-            body: JSON.stringify({ 
-                wallet_name: wallet.name, 
-                amount, 
-                category, 
-                description 
-            })
-        });
-
-        if (response.ok) {
-            showSuccess('Расход добавлен!');
-            closeModal('addExpenseModal');
-            document.getElementById('expenseAmount').value = '';
-            document.getElementById('expenseCategory').value = '';
-            document.getElementById('expenseDescription').value = '';
-            await loadAllData();
-        } else {
-            const error = await response.json();
-            showError(error.detail || 'Ошибка добавления расхода');
-        }
-    } catch (e) {
-        showError('Ошибка подключения');
-    }
+function formatAmount(value) {
+    return Number(value || 0).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 8
+    });
 }
 
-async function transfer() {
-    if (wallets.length < 2) {
-        showError('Для перевода нужно минимум 2 кошелька');
-        return;
-    }
-
-    const from_wallet_id = parseInt(document.getElementById('transferFrom').value);
-    const to_wallet_id = parseInt(document.getElementById('transferTo').value);
-    const amount = parseFloat(document.getElementById('transferAmount').value);
-
-    if (from_wallet_id === to_wallet_id) {
-        showError('Нельзя перевести в тот же кошелек');
-        return;
-    }
-
-    if (!amount || amount <= 0) {
-        showError('Введите корректную сумму');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/operations/transfer`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${encodeURIComponent(currentUser)}`
-            },
-            body: JSON.stringify({ from_wallet_id, to_wallet_id, amount })
-        });
-
-        if (response.ok) {
-            showSuccess('Перевод выполнен!');
-            closeModal('transferModal');
-            document.getElementById('transferAmount').value = '';
-            await loadAllData();
-        } else {
-            const error = await response.json();
-            showError(error.detail || 'Ошибка перевода');
-        }
-    } catch (e) {
-        showError('Ошибка подключения');
-    }
+function formatDate(value) {
+    return new Date(value).toLocaleString('en-US', {
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
 }
 
-function initReportDates() {
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-    
-    document.getElementById('reportDateFrom').valueAsDate = firstDay;
-    document.getElementById('reportDateTo').valueAsDate = tomorrow;
+function currencyLabel(currency) {
+    return currencySymbols[String(currency || '').toLowerCase()] || String(currency || '').toUpperCase();
 }
 
-async function loadReport() {
-    const dateFrom = document.getElementById('reportDateFrom').value;
-    const dateTo = document.getElementById('reportDateTo').value;
+function capitalize(value) {
+    return value.charAt(0).toUpperCase() + value.slice(1);
+}
 
-    if (!dateFrom || !dateTo) {
-        showError('Выберите период');
-        return;
-    }
-
-    if (dateFrom > dateTo) {
-        showError('Дата начала не может быть позже даты окончания');
-        return;
-    }
-
-    try {
-        const params = new URLSearchParams({
-            date_from: `${dateFrom}T00:00:00`,
-            date_to: `${dateTo}T23:59:59`
-        });
-
-        const response = await fetch(`${API_BASE}/operations?${params}`, {
-            headers: { 'Authorization': `Bearer ${encodeURIComponent(currentUser)}` }
-        });
-
-        if (response.ok) {
-            const rawReportOperations = await response.json();
-            // Нормализуем данные от бэкенда: приводим валюту к нижнему регистру, сумму к числу
-            const reportOperations = rawReportOperations.map(op => {
-                // Преобразуем сумму в число (обрабатываем строки, Decimal и другие типы)
-                let amount = 0;
-                if (typeof op.amount === 'number') {
-                    amount = op.amount;
-                } else if (typeof op.amount === 'string') {
-                    amount = parseFloat(op.amount) || 0;
-                } else if (op.amount != null) {
-                    amount = Number(op.amount) || 0;
-                }
-                
-                return {
-                    ...op,
-                    currency: String(op.currency || '').toLowerCase(),
-                    amount: amount
-                };
-            });
-            const tbody = document.getElementById('reportTable');
-            
-            if (reportOperations.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Нет операций за выбранный период</td></tr>';
-            } else {
-                tbody.innerHTML = reportOperations.reverse().map(t => {
-                    const wallet = wallets.find(w => w.id === t.wallet_id);
-                    const walletName = wallet ? wallet.name : 'Неизвестно';
-                    let typeClass, typeIcon, typeLabel;
-                    if (t.type === 'income') {
-                        typeClass = 'text-success';
-                        typeIcon = '➕';
-                        typeLabel = 'Доход';
-                    } else if (t.type === 'expense') {
-                        typeClass = 'text-danger';
-                        typeIcon = '➖';
-                        typeLabel = 'Расход';
-                    } else if (t.type === 'transfer') {
-                        typeClass = 'text-info';
-                        typeIcon = '🔄';
-                        typeLabel = 'Перевод';
-                    } else {
-                        typeClass = 'text-secondary';
-                        typeIcon = '❓';
-                        typeLabel = 'Неизвестно';
-                    }
-                    const date = new Date(t.created_at).toLocaleString('ru-RU', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-                    
-                    const currencySymbols = {
-                        'rub': '₽',
-                        'usd': '$',
-                        'eur': '€'
-                    };
-                    // Гарантируем что сумма - число
-                    const amount = typeof t.amount === 'number' ? t.amount : (parseFloat(t.amount) || 0);
-                    const currency = String(t.currency || '').toLowerCase();
-                    const symbol = currencySymbols[currency] || currency.toUpperCase();
-                    
-                    return `
-                        <tr>
-                            <td>${date}</td>
-                            <td>${typeIcon} <span class="${typeClass}">${typeLabel}</span></td>
-                            <td>${walletName}</td>
-                            <td>${t.category || t.description || '-'}</td>
-                            <td class="text-end ${typeClass}"><strong>${amount.toFixed(2)} ${symbol}</strong></td>
-                        </tr>
-                    `;
-                }).join('');
-            }
-
-            document.getElementById('reportContent').style.display = 'block';
-            showSuccess('Отчет сформирован!');
-        } else {
-            const error = await response.json();
-            showError(error.detail || 'Ошибка загрузки отчета');
-        }
-    } catch (e) {
-        console.error('Ошибка загрузки отчета:', e);
-        showError('Ошибка подключения к серверу');
-    }
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
 }

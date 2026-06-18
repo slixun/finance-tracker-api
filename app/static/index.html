@@ -1,341 +1,324 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Finance Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="./css/bootstrap.min.css">
     <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
-    <div class="container mt-5">
-        <h1 class="text-center mb-4">💰 Finance Tracker</h1>
-
-        <!-- Регистрация / Вход -->
-        <div id="authSection" class="card mb-4">
-            <div class="card-body">
-                <h3 class="card-title">Вход в систему</h3>
-                <div class="mb-3">
-                    <label for="username" class="form-label">Ваш логин</label>
-                    <input type="text" class="form-control" id="username" placeholder="Введите логин">
-                </div>
-                <button onclick="register()" class="btn btn-primary me-2">✨ Зарегистрироваться</button>
-                <button onclick="login()" class="btn btn-success">🔑 Войти</button>
-            </div>
-        </div>
-
-        <!-- Основной интерфейс -->
-        <div id="mainSection" style="display: none;">
-            <div class="alert alert-info d-flex justify-content-between align-items-center">
-                <span>Добро пожаловать, <strong id="currentUser"></strong>!</span>
-                <button onclick="logout()" class="btn btn-sm btn-outline-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">🚪</button>
+    <main class="app-shell">
+        <section id="authSection" class="auth-panel">
+            <div class="auth-copy">
+                <p class="eyebrow">Personal finance</p>
+                <h1>Finance Tracker</h1>
+                <p class="lead">
+                    Track wallets, income, expenses, transfers, and deposit interest in one quiet workspace.
+                </p>
             </div>
 
-            <!-- Общий баланс -->
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h4 class="card-title">📊 Ваш баланс</h4>
-                    <div id="totalBalance" class="display-4 text-primary">Загрузка...</div>
+            <div class="auth-card">
+                <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
+                    <button id="loginTab" class="auth-tab active" type="button" onclick="setAuthMode('login')">
+                        Sign in
+                    </button>
+                    <button id="registerTab" class="auth-tab" type="button" onclick="setAuthMode('register')">
+                        Create account
+                    </button>
                 </div>
-            </div>
 
-            <!-- Кнопки операций -->
-            <div class="row mb-4">
-                <div class="col-md-3 mb-2">
-                    <button class="btn btn-primary w-100" data-bs-toggle="modal" data-bs-target="#addWalletModal">
-                        💼 Добавить кошелек
-                    </button>
-                </div>
-                <div class="col-md-2 mb-2">
-                    <button class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#addIncomeModal">
-                        ➕ Доход
-                    </button>
-                </div>
-                <div class="col-md-2 mb-2">
-                    <button class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
-                        ➖ Расход
-                    </button>
-                </div>
-                <div class="col-md-2 mb-2">
-                    <button class="btn btn-info w-100" data-bs-toggle="modal" data-bs-target="#transferModal">
-                        🔄 Перевод
-                    </button>
-                </div>
-                <div class="col-md-3 mb-2">
-                    <button class="btn btn-warning w-100" data-bs-toggle="modal" data-bs-target="#reportModal">
-                        📊 Отчет
-                    </button>
-                </div>
+                <form id="authForm" onsubmit="submitAuth(event)">
+                    <div class="mb-3">
+                        <label for="authLogin" class="form-label">Login</label>
+                        <input id="authLogin" class="form-control" type="text" autocomplete="username" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="authPassword" class="form-label">Password</label>
+                        <input id="authPassword" class="form-control" type="password" autocomplete="current-password" minlength="8" required>
+                    </div>
+                    <button id="authSubmit" class="btn btn-primary w-100" type="submit">Sign in</button>
+                </form>
             </div>
+        </section>
 
-            <!-- Таблица кошельков -->
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h4 class="card-title">💳 Мои кошельки</h4>
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Название</th>
-                                    <th>Валюта</th>
-                                    <th class="text-end">Баланс</th>
-                                </tr>
-                            </thead>
-                            <tbody id="walletsTable"></tbody>
-                        </table>
+        <section id="mainSection" class="dashboard" style="display: none;">
+            <header class="topbar">
+                <div>
+                    <p class="eyebrow">Dashboard</p>
+                    <h1>Finance Tracker</h1>
+                </div>
+                <div class="user-actions">
+                    <span id="currentUser" class="user-pill"></span>
+                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="logout()">Log out</button>
+                </div>
+            </header>
+
+            <div id="alertHost" class="alert-host"></div>
+
+            <section class="summary-grid">
+                <article class="summary-card total-card">
+                    <span class="summary-label">Total balance</span>
+                    <strong id="totalBalance">0.00 KZT</strong>
+                    <small>Converted to KZT by the API</small>
+                </article>
+                <article class="summary-card">
+                    <span class="summary-label">Wallets</span>
+                    <strong id="walletCount">0</strong>
+                    <small>Active accounts</small>
+                </article>
+                <article class="summary-card">
+                    <span class="summary-label">Operations</span>
+                    <strong id="operationCount">0</strong>
+                    <small>Visible in history</small>
+                </article>
+            </section>
+
+            <section class="action-bar" aria-label="Main actions">
+                <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#walletModal">
+                    Add wallet
+                </button>
+                <button class="btn btn-success" type="button" data-bs-toggle="modal" data-bs-target="#incomeModal">
+                    Add income
+                </button>
+                <button class="btn btn-danger" type="button" data-bs-toggle="modal" data-bs-target="#expenseModal">
+                    Add expense
+                </button>
+                <button class="btn btn-info" type="button" data-bs-toggle="modal" data-bs-target="#transferModal">
+                    Transfer
+                </button>
+                <button class="btn btn-warning" type="button" data-bs-toggle="modal" data-bs-target="#interestModal">
+                    Interest
+                </button>
+            </section>
+
+            <section class="content-grid">
+                <article class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <h2>Wallets</h2>
+                            <p>Balances and currencies</p>
+                        </div>
+                    </div>
+                    <div id="walletList" class="wallet-list"></div>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <h2>Interest forecast</h2>
+                            <p>KZT and USD wallets only</p>
+                        </div>
+                    </div>
+                    <div class="interest-inline">
+                        <input id="quickInterestMonths" class="form-control" type="number" min="1" value="1">
+                        <button class="btn btn-outline-primary" type="button" onclick="calculateAllInterest('quick')">
+                            Calculate
+                        </button>
+                    </div>
+                    <div id="interestResults" class="interest-results empty-state">
+                        Choose a duration to estimate interest.
+                    </div>
+                </article>
+            </section>
+
+            <section class="panel operations-panel">
+                <div class="panel-header operations-header">
+                    <div>
+                        <h2>Operations</h2>
+                        <p>Income, expenses, transfers, and filtered reports</p>
+                    </div>
+                    <div class="filters">
+                        <select id="filterWallet" class="form-select" onchange="loadOperations()"></select>
+                        <input id="filterDateFrom" class="form-control" type="date" onchange="loadOperations()">
+                        <input id="filterDateTo" class="form-control" type="date" onchange="loadOperations()">
+                        <button class="btn btn-outline-secondary" type="button" onclick="resetFilters()">Reset</button>
                     </div>
                 </div>
-            </div>
-
-            <!-- Последние операции -->
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h4 class="card-title">📋 Последние операции</h4>
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Дата</th>
-                                    <th>Тип</th>
-                                    <th>Кошелек</th>
-                                    <th>Категория</th>
-                                    <th class="text-end">Сумма</th>
-                                </tr>
-                            </thead>
-                            <tbody id="transactionsTable"></tbody>
-                        </table>
-                    </div>
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Wallet</th>
+                                <th>Category</th>
+                                <th class="text-end">Amount</th>
+                                <th class="text-end">Balance after</th>
+                            </tr>
+                        </thead>
+                        <tbody id="operationsTable"></tbody>
+                    </table>
                 </div>
-            </div>
-        </div>
-    </div>
+            </section>
+        </section>
+    </main>
 
-    <!-- Модалка добавления кошелька -->
-    <div class="modal fade" id="addWalletModal" tabindex="-1">
+    <div class="modal fade" id="walletModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">💼 Новый кошелек</h5>
+                    <h2 class="modal-title fs-5">Add wallet</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <input id="walletId" type="hidden">
                     <div class="mb-3">
-                        <label class="form-label">Название</label>
-                        <input type="text" class="form-control" id="walletName" placeholder="Моя карта">
+                        <label class="form-label" for="walletName">Name</label>
+                        <input id="walletName" class="form-control" type="text" placeholder="Main card">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Валюта</label>
-                        <select class="form-select" id="walletCurrency">
+                        <label class="form-label" for="walletCurrency">Currency</label>
+                        <select id="walletCurrency" class="form-select">
+                            <option value="kzt">KZT</option>
                             <option value="usd">USD</option>
                             <option value="eur">EUR</option>
                             <option value="rub">RUB</option>
+                            <option value="btc">BTC</option>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Начальный баланс</label>
-                        <input type="number" class="form-control" id="walletBalance" value="0" step="0.01">
+                        <label class="form-label" for="walletBalance">Balance</label>
+                        <input id="walletBalance" class="form-control" type="number" min="0" step="0.01" value="0">
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="button" class="btn btn-primary" onclick="addWallet()">Создать</button>
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+                    <button id="walletSubmit" class="btn btn-primary" type="button" onclick="saveWallet()">Create wallet</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Модалка добавления дохода -->
-    <div class="modal fade" id="addIncomeModal" tabindex="-1">
+    <div class="modal fade" id="incomeModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">➕ Добавить доход</h5>
+                    <h2 class="modal-title fs-5">Add income</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">Кошелек</label>
-                        <select class="form-select" id="incomeWallet"></select>
+                        <label class="form-label" for="incomeWallet">Wallet</label>
+                        <select id="incomeWallet" class="form-select"></select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Сумма</label>
-                        <input type="number" class="form-control" id="incomeAmount" step="0.01">
+                        <label class="form-label" for="incomeAmount">Amount</label>
+                        <input id="incomeAmount" class="form-control" type="number" min="0.01" step="0.01">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Описание</label>
-                        <input type="text" class="form-control" id="incomeDescription" placeholder="Зарплата">
+                        <label class="form-label" for="incomeDescription">Description</label>
+                        <input id="incomeDescription" class="form-control" type="text" placeholder="Salary">
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="button" class="btn btn-success" onclick="addIncome()">Добавить</button>
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-success" type="button" onclick="addOperation('income')">Add income</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Модалка добавления расхода -->
-    <div class="modal fade" id="addExpenseModal" tabindex="-1">
+    <div class="modal fade" id="expenseModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">➖ Добавить расход</h5>
+                    <h2 class="modal-title fs-5">Add expense</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">Кошелек</label>
-                        <select class="form-select" id="expenseWallet"></select>
+                        <label class="form-label" for="expenseWallet">Wallet</label>
+                        <select id="expenseWallet" class="form-select"></select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Сумма</label>
-                        <input type="number" class="form-control" id="expenseAmount" step="0.01">
+                        <label class="form-label" for="expenseAmount">Amount</label>
+                        <input id="expenseAmount" class="form-control" type="number" min="0.01" step="0.01">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Категория</label>
-                        <input type="text" class="form-control" id="expenseCategory" placeholder="Еда">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Описание</label>
-                        <input type="text" class="form-control" id="expenseDescription" placeholder="Обед">
+                        <label class="form-label" for="expenseDescription">Category</label>
+                        <input id="expenseDescription" class="form-control" type="text" placeholder="Groceries">
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="button" class="btn btn-danger" onclick="addExpense()">Добавить</button>
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-danger" type="button" onclick="addOperation('expense')">Add expense</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Модалка перевода -->
-    <div class="modal fade" id="transferModal" tabindex="-1">
+    <div class="modal fade" id="transferModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">🔄 Перевести деньги</h5>
+                    <h2 class="modal-title fs-5">Transfer money</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">Откуда</label>
-                        <select class="form-select" id="transferFrom"></select>
+                        <label class="form-label" for="transferFrom">From</label>
+                        <select id="transferFrom" class="form-select"></select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Куда</label>
-                        <select class="form-select" id="transferTo"></select>
+                        <label class="form-label" for="transferTo">To</label>
+                        <select id="transferTo" class="form-select"></select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Сумма</label>
-                        <input type="number" class="form-control" id="transferAmount" step="0.01">
+                        <label class="form-label" for="transferAmount">Amount</label>
+                        <input id="transferAmount" class="form-control" type="number" min="0.01" step="0.01">
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="button" class="btn btn-info" onclick="transfer()">Перевести</button>
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-info" type="button" onclick="transferMoney()">Transfer</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Модалка отчета -->
-    <div class="modal fade" id="reportModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade" id="interestModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">📊 Отчет по финансам</h5>
+                    <h2 class="modal-title fs-5">Interest calculator</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <label class="form-label">От</label>
-                            <input type="date" class="form-control" id="reportDateFrom">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">До</label>
-                            <input type="date" class="form-control" id="reportDateTo">
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="interestWallet">Wallet</label>
+                        <select id="interestWallet" class="form-select"></select>
                     </div>
-                    <button class="btn btn-primary w-100 mb-4" onclick="loadReport()">📈 Сформировать отчет</button>
-                    
-                    <div id="reportContent" style="display: none;">
-                        <h5 class="mb-3">Операции за выбранный период:</h5>
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Дата</th>
-                                        <th>Тип</th>
-                                        <th>Кошелек</th>
-                                        <th>Категория</th>
-                                        <th class="text-end">Сумма</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="reportTable"></tbody>
-                            </table>
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="interestMonths">Duration in months</label>
+                        <input id="interestMonths" class="form-control" type="number" min="1" value="1">
                     </div>
+                    <div id="singleInterestResult" class="result-box empty-state">
+                        Select a wallet to calculate its interest.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-warning" type="button" onclick="calculateWalletInterest()">Calculate wallet</button>
+                    <button class="btn btn-primary" type="button" onclick="calculateAllInterest('modal')">Calculate all</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Toast контейнер -->
     <div class="toast-container position-fixed bottom-0 end-0 p-3">
-        <div id="toastNotification" class="toast" role="alert">
+        <div id="toastNotification" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
             <div class="toast-header">
-                <strong class="me-auto" id="toastTitle">Уведомление</strong>
+                <strong id="toastTitle" class="me-auto">Notice</strong>
                 <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
             </div>
-            <div class="toast-body" id="toastBody">
-                Сообщение
-            </div>
+            <div id="toastBody" class="toast-body"></div>
         </div>
     </div>
 
     <script src="./js/bootstrap.bundle.min.js"></script>
     <script src="./js/app.js"></script>
-    <script>
-        document.getElementById('reportModal').addEventListener('show.bs.modal', initReportDates);
-        
-        document.getElementById('addIncomeModal').addEventListener('show.bs.modal', function() {
-            updateWalletSelects();
-        });
-        
-        document.getElementById('addExpenseModal').addEventListener('show.bs.modal', function() {
-            updateWalletSelects();
-        });
-        
-        document.getElementById('transferModal').addEventListener('show.bs.modal', function() {
-            updateWalletSelects();
-        });
-        
-        // Сброс форм при закрытии модалок
-        document.getElementById('addWalletModal').addEventListener('hidden.bs.modal', function() {
-            document.getElementById('walletName').value = '';
-            document.getElementById('walletCurrency').value = 'rub';
-            document.getElementById('walletBalance').value = '0';
-        });
-        
-        document.getElementById('addIncomeModal').addEventListener('hidden.bs.modal', function() {
-            document.getElementById('incomeAmount').value = '';
-            document.getElementById('incomeDescription').value = '';
-        });
-        
-        document.getElementById('addExpenseModal').addEventListener('hidden.bs.modal', function() {
-            document.getElementById('expenseAmount').value = '';
-            document.getElementById('expenseCategory').value = '';
-            document.getElementById('expenseDescription').value = '';
-        });
-        
-        document.getElementById('transferModal').addEventListener('hidden.bs.modal', function() {
-            document.getElementById('transferAmount').value = '';
-        });
-        
-        document.getElementById('reportModal').addEventListener('hidden.bs.modal', function() {
-            document.getElementById('reportContent').style.display = 'none';
-        });
-    </script>
 </body>
 </html>
