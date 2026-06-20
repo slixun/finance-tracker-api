@@ -3,6 +3,7 @@
 A personal finance tracking REST API built with **FastAPI**, **SQLAlchemy 2.0**, and **PostgreSQL**, with a lightweight vanilla JS frontend. Users can manage multiple wallets in different currencies, log income/expenses/transfers, and calculate compound interest on their balances.
 
 **Live demo:** https://fastapi-service-642058528565.asia-southeast1.run.app/static/index.html
+
 **Interactive API docs:** https://fastapi-service-642058528565.asia-southeast1.run.app/docs
 
 > Built while learning FastAPI through tutorials, then extended with my own architecture, test suite, and cloud deployment.
@@ -11,9 +12,13 @@ A personal finance tracking REST API built with **FastAPI**, **SQLAlchemy 2.0**,
 
 ## Screenshots
 
-Add screenshots here, e.g.:
+## Dashboard
 ![Dashboard](docs/screenshots/dashboard.png)
+
+## Sign in
 ![Sign in](docs/screenshots/signin.png)
+
+## Swagger Docs
 ![Swagger docs](docs/screenshots/swagger.png)
 
 
