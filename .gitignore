@@ -11,5 +11,7 @@ wheels/
 .vscode
 .env
 
+# Test artifacts
+.pytest_cache
 finance.db
 test.db
