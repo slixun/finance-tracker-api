@@ -1,4 +1,6 @@
-const API_BASE = 'http://127.0.0.1:8000/api/v1';
+// Relative URL: works locally (127.0.0.1:8080) and in production (Cloud Run)
+// because the static frontend is served from the same FastAPI app/origin.
+const API_BASE = '/api/v1';
 const TOKEN_KEY = 'financeTrackerToken';
 const USER_KEY = 'financeTrackerUser';
 
